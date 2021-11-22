@@ -1,0 +1,14 @@
+[package]
+name = "saberviz"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "1.0.47"
+cpal = "0.13.4"
+crossbeam-channel = "0.5.1"
+iced = { version = "0.3", features = ["canvas"] }
+num-complex = "0.4.0"
+num-traits = "0.2.14"
