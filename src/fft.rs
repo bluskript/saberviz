@@ -3,24 +3,11 @@ use std::{
     ops::{Add, Sub},
 };
 
-use num_complex::Complex64;
+use num_complex::Complex32;
 use num_traits::{Num, ToPrimitive};
 use std::ops::Mul;
 
-trait CExp {
-    fn cexp(self) -> Complex64;
-}
-
-impl CExp for Complex64 {
-    // Euler's formula
-    // e^(i*x) = cos(x) + i*sin(x)
-    fn cexp(self) -> Complex64 {
-        let exp = self.re.exp();
-        Complex64::new(exp * self.re.cos(), exp * self.re.sin())
-    }
-}
-
-fn inner_fft(mut amplitudes: Vec<Complex64>) -> Vec<Complex64> {
+fn inner_fft(mut amplitudes: Vec<Complex32>) -> Vec<Complex32> {
     let len = amplitudes.len();
     if len <= 1 {
         return amplitudes;
@@ -43,30 +30,30 @@ fn inner_fft(mut amplitudes: Vec<Complex64>) -> Vec<Complex64> {
     let a = -2.0 * PI;
     for i in 0..half {
         // the progress along the signal
-        let progress = i / len;
+        let progress = i as f32 / len as f32;
         // fourier transform
-        let pos = Complex64::new(0.0, a * progress as f64).cexp().mul(odd[i]);
-        let left_half = even[i].add(pos);
-        let right_half = even[i].sub(pos);
-        amplitudes[i] = left_half;
-        odd[i] = left_half;
-        even[i] = right_half;
-        amplitudes[half + i] = right_half;
+        let pos = Complex32::new(0.0, a as f32 * progress as f32)
+            .exp()
+            .mul(odd[i]);
+        odd[i] = even[i].add(pos);
+        amplitudes[i] = odd[i];
+        even[i] = even[i].sub(pos);
+        amplitudes[i + half] = even[i];
     }
 
     amplitudes
 }
 
-pub fn fft<T: ToPrimitive + Num>(amplitudes: Vec<T>) -> Vec<Complex64> {
+pub fn fft<T: ToPrimitive + Num>(amplitudes: Vec<T>) -> Vec<Complex32> {
     return inner_fft(
         amplitudes
             .iter()
-            .map(|x| Complex64::new(x.to_f64().unwrap(), 0.0))
+            .map(|x| Complex32::new(x.to_f32().unwrap(), 0.0))
             .collect(),
-    );
+    );;
 }
 
-pub fn inverse_fft(mut amplitudes: Vec<Complex64>) -> Vec<Complex64> {
+pub fn inverse_fft(mut amplitudes: Vec<Complex32>) -> Vec<Complex32> {
     let len = amplitudes.len();
     let inverse = 1 / len;
 
@@ -83,8 +70,8 @@ pub fn inverse_fft(mut amplitudes: Vec<Complex64>) -> Vec<Complex64> {
         // conjugate again
         current_amp.im = -current_amp.im;
         // scale
-        current_amp.re = current_amp.re * inverse as f64;
-        current_amp.im = current_amp.im * inverse as f64;
+        current_amp.re = current_amp.re * inverse as f32;
+        current_amp.im = current_amp.im * inverse as f32;
     }
     return amplitudes;
 }

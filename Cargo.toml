@@ -9,6 +9,10 @@ edition = "2021"
 anyhow = "1.0.47"
 cpal = "0.13.4"
 crossbeam-channel = "0.5.1"
-iced = { version = "0.3", features = ["canvas"] }
+nannou = "0.18.0"
 num-complex = "0.4.0"
 num-traits = "0.2.14"
+
+[profile.dev]
+opt-level = 1
+overflow-checks = false

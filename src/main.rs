@@ -1,22 +1,18 @@
 mod fft;
+mod widgets;
 
 use cpal::{
     default_host,
     traits::{DeviceTrait, HostTrait},
     Stream,
 };
-use crossbeam_channel::{unbounded, Receiver};
-use iced::{
-    canvas::{Frame, Path, Program},
-    executor,
-    widget::canvas::Canvas,
-    Application, Color, Command, Length, Point, Rectangle, Settings,
-};
-
-use crate::fft::fft;
+use crossbeam_channel::bounded;
+use nannou::prelude::*;
+use num_complex::Complex32;
+use widgets::{complex_path, frequency_graph};
 
 fn open_audio() -> Result<(Stream, crossbeam_channel::Receiver<Vec<f32>>), anyhow::Error> {
-    let (s, r) = unbounded();
+    let (s, r) = bounded(1);
 
     let host = default_host();
     let device = host.default_output_device().unwrap();
@@ -27,7 +23,10 @@ fn open_audio() -> Result<(Stream, crossbeam_channel::Receiver<Vec<f32>>), anyho
         .with_max_sample_rate();
     let stream = device.build_input_stream(
         &supported_config.into(),
-        move |data: &[f32], _: &cpal::InputCallbackInfo| s.send(data.into()).unwrap(),
+        move |data: &[f32], _: &cpal::InputCallbackInfo| {
+            let _ = s.try_send(data.into());
+            return ();
+        },
         |err| {
             println!("Error: {:?}", err);
         },
@@ -37,72 +36,87 @@ fn open_audio() -> Result<(Stream, crossbeam_channel::Receiver<Vec<f32>>), anyho
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    SaberViz::run(Settings {
-        antialiasing: true,
-        ..Settings::default()
-    })?;
+    nannou::app(model).update(update).run();
     Ok(())
 }
 
-struct SaberViz {
-    chan: Receiver<Vec<f32>>,
-    stream: Stream,
-}
+fn model(app: &App) -> Model {
+    let (stream, channel) = open_audio().unwrap();
 
-impl Application for SaberViz {
-    type Executor = executor::Default;
-    type Message = ();
-    type Flags = ();
+    let main_window = app
+        .new_window()
+        .view(view)
+        .event(window_event)
+        .key_pressed(key_pressed)
+        .build()
+        .unwrap();
 
-    fn new(_flags: Self::Flags) -> (Self, iced::Command<Self::Message>) {
-        let (stream, chan) = open_audio().unwrap();
-        iced::Subscription::from_recipe();
-        let val = SaberViz { chan, stream };
-        (val, Command::none())
-    }
-
-    fn title(&self) -> String {
-        "SaberViz".to_string()
-    }
-
-    fn update(
-        &mut self,
-        _message: Self::Message,
-        _clipboard: &mut iced::Clipboard,
-    ) -> iced::Command<Self::Message> {
-        todo!()
-    }
-
-    fn view(&mut self) -> iced::Element<'_, Self::Message> {
-        Canvas::new(FourierGraph {
-            samples: vec![0.0; 2048],
-        })
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .into()
+    Model {
+        main_window,
+        channel,
+        _stream: stream,
+        frequency_domain: vec![0.0.into(), 100.0.into()],
+        zoom: 1.0,
+        paused: false,
     }
 }
 
-struct FourierGraph {
-    samples: Vec<f32>,
+struct Model {
+    main_window: WindowId,
+    _stream: Stream,
+    channel: crossbeam_channel::Receiver<Vec<f32>>,
+    frequency_domain: Vec<Complex32>,
+    zoom: f32,
+    paused: bool,
 }
 
-impl Program<()> for FourierGraph {
-    fn draw(
-        &self,
-        bounds: Rectangle,
-        _cursor: iced::canvas::Cursor,
-    ) -> Vec<iced::canvas::Geometry> {
-        let frequency_domain = fft(self.samples.clone());
-        let mut frame = Frame::new(bounds.size());
-        frame.fill(
-            &Path::new(|p| {
-                frequency_domain.iter().for_each(|c| {
-                    p.move_to(Point::new(c.re as f32, c.im as f32));
-                });
-            }),
-            Color::BLACK,
-        );
-        vec![frame.into_geometry()]
+fn window_event(_app: &App, model: &mut Model, ev: WindowEvent) {
+    match ev {
+        MousePressed(button) => {
+            if button == MouseButton::Middle {
+                model.paused = !model.paused;
+            }
+        }
+        MouseWheel(delta, _touch_phase) => {
+            if let MouseScrollDelta::LineDelta(rows, lines) = delta {
+                model.zoom += lines;
+            }
+        }
+        _ => {}
     }
+}
+
+fn key_pressed(_app: &App, model: &mut Model, key: Key) {}
+
+fn update(_app: &App, model: &mut Model, _update: Update) {
+    for samples in model.channel.try_recv() {
+        if model.paused {
+            return;
+        }
+        let result = fft::fft(samples);
+        model.frequency_domain = result;
+    }
+}
+
+fn view(app: &App, model: &Model, frame: Frame) {
+    let win = app.window_rect();
+    let draw = app.draw();
+
+    draw.background().color(BLACK);
+    complex_path(
+        &draw,
+        win,
+        model.frequency_domain.clone(),
+        model.zoom,
+        WHITE,
+    );
+    frequency_graph(
+        &draw,
+        win,
+        model.frequency_domain.clone(),
+        44100,
+        WHITE,
+        0.0005,
+    );
+    draw.to_frame(app, &frame).unwrap();
 }
