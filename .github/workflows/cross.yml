@@ -12,10 +12,10 @@ jobs:
       matrix:
         targetPlatform:
           - x86_64
-          - i686
-          - aarch64
-          - mips
-          - mipsel
+          # - i686
+          # - aarch64
+          # - mips
+          # - mipsel
     name: "🐧 Compile for Linux"
     runs-on: ubuntu-latest
     steps:
@@ -29,6 +29,8 @@ jobs:
         run: "sudo apt install gcc-mipsel-linux-gnu -y"
       - name: Install linker (aarch64)
         run: "sudo apt install gcc-aarch64-linux-gnu -y"
+      - name: Install alsa
+        run: "sudo apt install alsa-base alsa-tools libasound2-dev librust-alsa-sys-dev"
       - name: 🗳 Add Target
         run: "rustup target add ${{matrix.targetPlatform}}-unknown-linux-gnu"
       - name: 🛠 Build
@@ -107,11 +109,11 @@ jobs:
     strategy:
       matrix:
         targetPlatform:
-          - linux_aarch64
-          - linux_i686
           - linux_x86_64
-          - linux_mips
-          - linux_mipsel
+          # - linux_aarch64
+          # - linux_i686
+          # - linux_mips
+          # - linux_mipsel
           - windows
           - macos
       fail-fast: false
